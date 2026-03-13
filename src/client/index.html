@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Earth Simulator</title>
+    <style>
+      body, html { margin: 0; padding: 0; width: 100%; height: 100%; }
+      #map, #globe { position: absolute; width: 50%; height: 100%; }
+      #globe { left: 50%; }
+      #status { position: absolute; z-index: 5; right: 10px; top: 10px; background: rgba(0,0,0,.6); color:#fff; padding:8px; border-radius:4px; }
+    </style>
+    <link href="https://unpkg.com/maplibre-gl@2.6.1/dist/maplibre-gl.css" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="status">earth-simulator</div>
+    <div id="map"></div>
+    <div id="globe"></div>
+
+    <script type="module">
+      import * as THREE from 'https://unpkg.com/three@0.161.0/build/three.module.js';
+      import { OrbitControls } from 'https://unpkg.com/three@0.161.0/examples/jsm/controls/OrbitControls.js';
+
+      const map = new maplibregl.Map({
+        container: 'map',
+        style: 'https://demotiles.maplibre.org/style.json',
+        center: [0, 0],
+        zoom: 1
+      });
+
+      // Globe
+      const globeScene = new THREE.Scene();
+      const globeCamera = new THREE.PerspectiveCamera(45, window.innerWidth/2 / window.innerHeight, 0.1, 2000);
+      globeCamera.position.set(0, 0, 120);
+      const globeRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      globeRenderer.setSize(window.innerWidth/2, window.innerHeight);
+      document.getElementById('globe').appendChild(globeRenderer.domElement);
+
+      const earthLOD = new THREE.LOD();
+      const highGeo = new THREE.SphereGeometry(63.78137, 128, 128);
+      const mediumGeo = new THREE.SphereGeometry(63.78137, 64, 64);
+      const lowGeo = new THREE.SphereGeometry(63.78137, 32, 32);
+      const earthMaterial = new THREE.MeshStandardMaterial({ color: 0x2266cc, roughness: 1, metalness: 0 });
+
+      const highMesh = new THREE.Mesh(highGeo, earthMaterial);
+      const mediumMesh = new THREE.Mesh(mediumGeo, earthMaterial);
+      const lowMesh = new THREE.Mesh(lowGeo, earthMaterial);
+      earthLOD.addLevel(highMesh, 0);
+      earthLOD.addLevel(mediumMesh, 80);
+      earthLOD.addLevel(lowMesh, 150);
+      globeScene.add(earthLOD);
+
+      const light = new THREE.DirectionalLight(0xffffff, 1);
+      light.position.set(5, 5, 5);
+      globeScene.add(light);
+      globeScene.add(new THREE.AmbientLight(0x404040, 0.5));
+
+      const controls = new OrbitControls(globeCamera, globeRenderer.domElement);
+      controls.enableDamping = true;
+
+      function animate() {
+        requestAnimationFrame(animate);
+        earthLOD.rotation.y += 0.0005;
+        earthLOD.update(globeCamera);
+        controls.update();
+        globeRenderer.render(globeScene, globeCamera);
+      }
+      animate();
+
+      const ws = new WebSocket(`ws://${location.host}`);
+      ws.onopen = () => console.log('WS connected');
+      ws.onmessage = (ev) => {
+        const d = JSON.parse(ev.data);
+        console.log('ws', d);
+      };
+
+      map.on('load', () => {
+        map.addSource('flights', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        map.addLayer({ id: 'flights', type: 'circle', source: 'flights', paint: { 'circle-radius': 4, 'circle-color': '#ff5500' } });
+      });
+
+      setInterval(async () => {
+        const tile = await fetch('/data/tile-coordinates?lon=0&lat=0&z=2').then((r) => r.json());
+        document.getElementById('status').innerText = `simulation:${new Date().toISOString()} tile ${tile.x},${tile.y}`;
+      }, 5000);
+    </script>
+
+    <script src="https://unpkg.com/maplibre-gl@2.6.1/dist/maplibre-gl.js"></script>
+  </body>
+</html>

@@ -1,0 +1,42 @@
+version: '3.9'
+services:
+  postgres:
+    image: postgis/postgis:3.4-3.4
+    container_name: earth_sim_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: earth_simulator
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    container_name: earth_sim_redis
+    ports:
+      - '6379:6379'
+
+  api:
+    build: .
+    container_name: earth_sim_api
+    command: npm run dev
+    environment:
+      PORT: 4000
+      PGHOST: postgres
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: earth_simulator
+      PGPORT: 5432
+      OPENWEATHER_API_KEY: ''
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - '4000:4000'
+    volumes:
+      - .:/workspaces/earth-simulator
+
+volumes:
+  pgdata:
